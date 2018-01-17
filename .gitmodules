@@ -1,0 +1,3 @@
+[submodule "NCBI_taxonomy_tree"]
+	path = NCBI_taxonomy_tree
+	url = https://github.com/frallain/NCBI_taxonomy_tree
