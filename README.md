@@ -25,9 +25,3 @@ optional arguments:
   --workers WORKERS, -w WORKERS
                         Number of parallel downloads
 ```
-
-## Todo
-[] Add switch for genbank or refseq
-[] Add an all argument for the filter switch
-[] Fix the update function
-
