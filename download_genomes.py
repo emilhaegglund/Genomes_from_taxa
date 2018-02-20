@@ -180,6 +180,7 @@ def download_genome(assembly_line):
     base_dir = assembly_line[-1]
     basename = assembly_line[7] + '_' + assembly_line[0]
     basename = basename.replace(' ', '_')
+    basename = basename.replace('/', '_')
     #else:
     #   basename = assembly_line[0]
 
