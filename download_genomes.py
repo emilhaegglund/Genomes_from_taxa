@@ -15,7 +15,10 @@ def parse_arguments():
     """
     parser = argparse.ArgumentParser(description='Download genomes from NCBI')
 
-    parser.add_argument('--taxid', '-t', required=True,
+    parser.add_argument('--taxonomy', '-d',  required=False,
+                        help='''Select taxonomy to use, either ncbi or gtdb''')
+
+    parser.add_argument('--taxid', '-t', required=False,
                         help='Taxonomical ID')
 
     parser.add_argument('--update', '-u',
@@ -30,6 +33,9 @@ def parse_arguments():
                         will download genomes with Complete genome or contig as assembly status''')
     parser.add_argument('--workers', '-w',
                         help='Number of parallel downloads')
+
+    parser.add_argument('--assembly_file', '-a',
+                        help='''Provide your own filtered assembly file, overrule taxid and filter option''')
 
     args = parser.parse_args()
 
@@ -112,6 +118,23 @@ def download_taxonomy(basedir):
     tree = create_ncbi_tree(basedir)
 
     return tree
+
+#def download_gtdb_taxonomy(basedir):
+#    """
+#    Download gtdb taxonomy.
+#    """
+#    print('Download GTDB taxonomy')
+
+
+#    url = 'https://data.ace.uq.edu.au/public/gtdb/release83/bac_taxonomy_r83.tsv'
+#    ret = requests.get(url, stream=True)
+#    with open(taxonomy_file, 'wb') as f:
+#        for chunk in ret.iter_content(4096):
+#            f.write(chunk)
+
+ #   tree = create_gtdb_tree(basedir)
+
+ #   return tree
 
 def check_taxonomy_files(basedir):
     """
@@ -320,60 +343,66 @@ def main():
 
     args = parse_arguments()
     update = False
-    taxid = int(args.taxid)
-    base_dir = args.output
-    filter_values = args.filter.split(',')
-    assembly_filter = []
-    filter_value_map = {'complete':'Complete Genome', 'scaffold':'Scaffold', 'contig':'Contig'}
-    for value in filter_values:
-        if value in filter_value_map.keys():
-            assembly_filter.append(filter_value_map[value])
-        else:
-            print(value + ' is not a valid filter and will not be used')
-
     # Set number of workers to use
-    if not args.workers:
-        j = 1
-    else:
-        j = int(args.workers)
-
+    base_dir = args.output
     if not os.path.exists(base_dir):
         os.mkdir(base_dir)
-    assembly_summary_file = os.path.join(base_dir, 'assembly_summary.txt')
-    if os.path.isfile(assembly_summary_file) and not update:
-        assembly_summary = read_assembly_summary(base_dir)
+    if not args.assembly_file:
+        taxid = int(args.taxid)
+        filter_values = args.filter.split(',')
+        assembly_filter = []
+        filter_value_map = {'complete':'Complete Genome', 'scaffold':'Scaffold', 'contig':'Contig'}
+        for value in filter_values:
+            if value in filter_value_map.keys():
+                assembly_filter.append(filter_value_map[value])
+            else:
+                print(value + ' is not a valid filter and will not be used')
+
+
+        assembly_summary_file = os.path.join(base_dir, 'assembly_summary.txt')
+        if os.path.isfile(assembly_summary_file) and not update:
+            assembly_summary = read_assembly_summary(base_dir)
+        else:
+            assembly_summary = download_assembly_summary(base_dir)
+
+        if check_taxonomy_files(base_dir) and not update:
+            tree = create_ncbi_tree(base_dir)
+        else:
+            tree = download_taxonomy(base_dir)
+
+        species_list = species_to_download(taxid, tree, assembly_summary)
+        for assembly_line in species_list:
+            assembly_line.append(base_dir)
+
+        print('Total number of genomes in ' + str(taxid) + ':' + str(len(species_list)))
+
+        filtered_species_list = []
+        for assembly_line in species_list:
+            if assembly_line[11] in assembly_filter:
+                filtered_species_list.append(assembly_line)
+
     else:
-        assembly_summary = download_assembly_summary(base_dir)
+        filtered_species_list = []
+        with open(args.assembly_file, 'r') as asm_summary:
+            for line in asm_summary:
+                if line[0] != '#':
+                    line = line.strip('\n')
+                    line = line.split('\t')
+                    line.append(base_dir)
+                    filtered_species_list.append(line)
 
-    if check_taxonomy_files(base_dir) and not update:
-        tree = create_ncbi_tree(base_dir)
-    else:
-        tree = download_taxonomy(base_dir)
-
-    species_list = species_to_download(taxid, tree, assembly_summary)
-    for assembly_line in species_list:
-        assembly_line.append(base_dir)
-
-    print('Total number of genomes in ' + str(taxid) + ':' + str(len(species_list)))
-
-    filtered_species_list = []
-    for assembly_line in species_list:
-        if assembly_line[11] in assembly_filter:
-            filtered_species_list.append(assembly_line)
     print('Will download ' + str(len(filtered_species_list)) + ' genomes')
 
+    # Set number of workers
+    if not args.workers:
+        j = 1
+    elif int(args.workers) > len(filtered_species_list):  # not use more workers than needed
+        j = len(filtered_species_list)
+    else:
+        j = int(args.workers)
     pool = mp.Pool(processes=j)
     pool.map(download_genome, filtered_species_list)
 
-    #for assembly_line in species_list:
-    #    print(assembly_line[7])
-    #    download_genome(3, assembly_line, base_dir)
 
-
-    directory_list_path = base_dir + '/list_of_dirs.txt'
-    directory_list = open(directory_list_path, 'w')
-    for assembly_line in species_list:
-        directory = os.path.join(base_dir, assembly_line[0])
-        directory_list.write(directory + '\t' + assembly_line[7])
-
-main()
+if __name__ == "__main__":
+    main()
