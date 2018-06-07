@@ -15,8 +15,8 @@ def parse_arguments():
     """
     parser = argparse.ArgumentParser(description='Download genomes from NCBI')
 
-    parser.add_argument('--taxonomy', '-d',  required=False,
-                        help='''Select taxonomy to use, either ncbi or gtdb''')
+#    parser.add_argument('--taxonomy', '-d',  required=False,
+#                        help='''Select taxonomy to use, either ncbi or gtdb''')
 
     parser.add_argument('--taxid', '-t', required=False,
                         help='Taxonomical ID')
@@ -36,6 +36,8 @@ def parse_arguments():
 
     parser.add_argument('--assembly_file', '-a',
                         help='''Provide your own filtered assembly file, overrule taxid and filter option''')
+    parser.add_argument('--dry_run', '-d', action='store_true',
+                        help='''Will only print the genomes that would have been downloaded''')
 
     args = parser.parse_args()
 
@@ -312,10 +314,9 @@ def species_to_download(taxid, tree, assembly_summary):
     species_list - entries from assembly_summary.txt that are descendats from taxid
     """
     species_list = []
-    descendants = tree.getLeaves(taxid)
-
+    descendants = tree.getDescendants([taxid])
     # find descendants that are also in the assembly summary
-    for specie in descendants:
+    for specie in descendants[taxid]:
         for assembly_line in assembly_summary:
             if int(specie) == int(assembly_line[5]):
                 species_list.append(assembly_line)
@@ -369,7 +370,6 @@ def main():
             tree = create_ncbi_tree(base_dir)
         else:
             tree = download_taxonomy(base_dir)
-
         species_list = species_to_download(taxid, tree, assembly_summary)
         for assembly_line in species_list:
             assembly_line.append(base_dir)
@@ -400,8 +400,13 @@ def main():
         j = len(filtered_species_list)
     else:
         j = int(args.workers)
-    pool = mp.Pool(processes=j)
-    pool.map(download_genome, filtered_species_list)
+
+    if not args.dry_run:
+        pool = mp.Pool(processes=j)
+        pool.map(download_genome, filtered_species_list)
+    else:
+        for assembly in filtered_species_list:
+            print(assembly[7])
 
 
 if __name__ == "__main__":
