@@ -95,7 +95,6 @@ def read_assembly_summary(basedir):
                 line = line.split('\t')
                 assembly_summary.append(line)
 
-    print(len(assembly_summary))
     return assembly_summary
 
 def download_taxonomy(basedir):
@@ -370,6 +369,7 @@ def main():
             tree = create_ncbi_tree(base_dir)
         else:
             tree = download_taxonomy(base_dir)
+
         species_list = species_to_download(taxid, tree, assembly_summary)
         for assembly_line in species_list:
             assembly_line.append(base_dir)
